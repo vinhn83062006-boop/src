@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Dashboard</title>
+  <style>
+    body { margin: 0; display: flex; font-family: Arial; }
+    nav {
+      width: 220px;
+      background: #222;
+      color: white;
+      padding: 20px;
+      height: 100vh;
+    }
+    nav button {
+      width: 100%;
+      margin: 5px 0;
+      padding: 10px;
+      cursor: pointer;
+    }
+    main { flex: 1; padding: 20px; }
+    section { display: none; }
+    section.active { display: block; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { border: 1px solid #ccc; padding: 8px; }
+  </style>
+</head>
+<body>
+
+<nav>
+  <h3>MENU</h3>
+  <button onclick="show('home')">🏠 Trang chủ</button>
+  <button onclick="show('products')">📦 Sản phẩm</button>
+  <button onclick="show('user')">👤 User</button>
+
+  <!-- ADMIN ONLY -->
+  <button id="orderMenu" onclick="show('orders')" style="display:none">
+    🧾 Đơn hàng
+  </button>
+
+  <button onclick="logout()">🚪 Logout</button>
+</nav>
+
+<main>
+  <section id="home" class="active">
+    <h2>Trang chủ</h2>
+    <p>Xin chào 👋</p>
+  </section>
+
+  <section id="products">
+    <h2>Sản phẩm</h2>
+    <ul id="productList"></ul>
+  </section>
+
+  <section id="user">
+    <h2>Thông tin user</h2>
+    <p id="userEmail"></p>
+  </section>
+
+  <!-- ADMIN ORDER -->
+  <section id="orders">
+    <h2>Quản lý đơn hàng</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>User</th>
+          <th>Tổng tiền</th>
+          <th>Trạng thái</th>
+          <th>Hành động</th>
+        </tr>
+      </thead>
+      <tbody id="orderList"></tbody>
+    </table>
+  </section>
+</main>
+
+<script>
+const token = localStorage.getItem("token");
+if (!token) location.href = "/login";
+
+/* SWITCH TAB */
+function show(id) {
+  document.querySelectorAll("section").forEach(s => s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
+}
+
+/* USER INFO */
+fetch("/api/users/me", {
+  headers: { Authorization: "Bearer " + token }
+})
+.then(res => res.json())
+.then(data => {
+ userEmail.innerText = data.email;
+
+if (data.role === "admin") {
+  document.getElementById("orderMenu").style.display = "block";
+  loadOrders();
+}
+
+});
+
+/* PRODUCTS */
+fetch("/api/products")
+.then(res => res.json())
+.then(data => {
+  productList.innerHTML = "";
+  data.forEach(p => {
+    const li = document.createElement("li");
+    li.innerText = `${p.name} - ${p.price}đ`;
+    productList.appendChild(li);
+  });
+});
+
+/* LOAD ORDERS (ADMIN) */
+function loadOrders() {
+  fetch("/api/orders", {
+    headers: { Authorization: "Bearer " + token }
+  })
+  .then(res => res.json())
+  .then(data => {
+    orderList.innerHTML = "";
+    data.forEach(o => {
+      orderList.innerHTML += `
+        <tr>
+          <td>${o.user.email}</td>
+          <td>${o.total}đ</td>
+          <td>${o.status}</td>
+          <td>
+            ${o.status === "pending"
+              ? `<button onclick="approve('${o._id}')">Duyệt</button>`
+              : "✔"}
+          </td>
+        </tr>
+      `;
+    });
+  });
+}
+
+/* APPROVE ORDER */
+function approve(id) {
+  fetch("/api/orders/" + id, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify({ status: "done" })
+  })
+  .then(() => loadOrders());
+}
+
+/* LOGOUT */
+function logout() {
+  localStorage.removeItem("token");
+  location.href = "./login.html";
+}
+</script>
+</body>
+</html>
