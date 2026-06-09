@@ -1,29 +1,14 @@
 const Product = require("../models/Product");
 
-// GET ALL
+// Lưu ý: Project hiện tại chưa có models/Product.
+// File này chỉ nhằm tránh crash khi router/productRoutes.js bị load.
+// Nếu bạn thật sự cần tính năng product, hãy tạo models/Product + hoàn thiện các hàm dưới đây.
+
 exports.getAll = async (req, res) => {
-  const products = await Product.find();
-  res.json(products);
+  return res.status(501).json({ message: "Chưa triển khai product" });
 };
 
-// CREATE
 exports.create = async (req, res) => {
-  const product = await Product.create(req.body);
-  res.json(product);
+  return res.status(501).json({ message: "Chưa triển khai product" });
 };
 
-// UPDATE
-exports.update = async (req, res) => {
-  const product = await Product.findByIdAndUpdate(
-    req.params.id,
-    req.body,
-    { new: true }
-  );
-  res.json(product);
-};
-
-// DELETE
-exports.remove = async (req, res) => {
-  await Product.findByIdAndDelete(req.params.id);
-  res.json({ message: "Deleted" });
-};
