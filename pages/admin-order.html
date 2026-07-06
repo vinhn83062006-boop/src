@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+  <meta charset="UTF-8">
+  <title>Admin - Quản lý đơn hàng</title>
+</head>
+<body>
+
+<h2>📊 TẤT CẢ ĐƠN HÀNG</h2>
+<table border="1" cellpadding="5">
+  <thead>
+    <tr>
+      <th>User</th>
+      <th>Tổng tiền</th>
+      <th>Trạng thái</th>
+      <th>Hành động</th>
+    </tr>
+  </thead>
+  <tbody id="orderTable"></tbody>
+</table>
+
+<script>
+const token = localStorage.getItem("token");
+if (!token) location.href = "./login.html";
+
+function loadOrders() {
+  fetch("/api/orders", {
+    headers: { Authorization: "Bearer " + token }
+  })
+  .then(res => res.json())
+  .then(data => {
+    orderTable.innerHTML = "";
+    data.forEach(o => {
+      const tr = document.createElement("tr");
+
+      tr.innerHTML = `
+        <td>${o.user.email}</td>
+        <td>${o.totalPrice}đ</td>
+        <td>
+          <select onchange="updateStatus('${o._id}', this.value)">
+            <option ${o.status==="pending"?"selected":""}>pending</option>
+            <option ${o.status==="confirmed"?"selected":""}>confirmed</option>
+            <option ${o.status==="shipping"?"selected":""}>shipping</option>
+            <option ${o.status==="done"?"selected":""}>done</option>
+            <option ${o.status==="cancel"?"selected":""}>cancel</option>
+          </select>
+        </td>
+        <td>
+          <button onclick="deleteOrder('${o._id}')">❌ Xóa</button>
+        </td>
+      `;
+      orderTable.appendChild(tr);
+    });
+  });
+}
+
+function updateStatus(id, status) {
+  fetch("/api/orders/" + id, {
+    method: "PUT",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify({ status })
+  }).then(() => loadOrders());
+}
+
+function deleteOrder(id) {
+  if (!confirm("Xóa đơn hàng?")) return;
+
+  fetch("/api/orders/" + id, {
+    method: "DELETE",
+    headers: { Authorization: "Bearer " + token }
+  }).then(() => loadOrders());
+}
+
+loadOrders();
+</script>
+
+</body>
+</html>

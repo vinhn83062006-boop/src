@@ -1,0 +1,8 @@
+{
+  "permissions": {
+    "allow": [
+      "Read(//d/xampp/htdocs/**)",
+      "Bash(node -e \"require\\(''./routes/userRoutes''\\)\")"
+    ]
+  }
+}
