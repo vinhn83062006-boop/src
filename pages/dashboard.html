@@ -33,10 +33,13 @@
   <button onclick="show('products')">📦 Sản phẩm</button>
   <button onclick="show('user')">👤 User</button>
 
+  <button onclick="show('userActivity')">📚 Hoạt động user</button>
+
   <!-- ADMIN ONLY -->
   <button id="orderMenu" onclick="show('orders')" style="display:none">
     🧾 Đơn hàng
   </button>
+
 
   <button onclick="logout()">🚪 Logout</button>
 </nav>
@@ -48,17 +51,59 @@
   </section>
 
   <section id="products">
-    <h2>Sản phẩm</h2>
+    <h2>Sản phẩm (admin)</h2>
+    <div style="display:flex; gap:8px; margin-bottom:10px;">
+      <input id="newProductName" placeholder="Tên" style="flex:1; padding:8px;" />
+      <input id="newProductPrice" type="number" placeholder="Giá" style="width:120px; padding:8px;" />
+      <button onclick="createProduct()">Add</button>
+    </div>
     <ul id="productList"></ul>
   </section>
+
 
   <section id="user">
     <h2>Thông tin user</h2>
     <p id="userEmail"></p>
   </section>
 
+  <section id="userActivity">
+    <h2>Hoạt động user</h2>
+    <div style="display:flex; gap:10px; margin-bottom:12px; align-items:center;">
+      <select id="userSelect" style="flex:1; padding:8px;"></select>
+      <button onclick="loadUserActivity()">Xem</button>
+    </div>
+
+    <div style="margin-bottom:18px;">
+      <h3 style="margin:0 0 8px 0;">Tasks</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Title</th>
+            <th>Created</th>
+          </tr>
+        </thead>
+        <tbody id="activityTasks"></tbody>
+      </table>
+    </div>
+
+    <div>
+      <h3 style="margin:0 0 8px 0;">Orders</h3>
+      <table>
+        <thead>
+          <tr>
+            <th>Total</th>
+            <th>Status</th>
+            <th>Items</th>
+          </tr>
+        </thead>
+        <tbody id="activityOrders"></tbody>
+      </table>
+    </div>
+  </section>
+
   <!-- ADMIN ORDER -->
   <section id="orders">
+
     <h2>Quản lý đơn hàng</h2>
     <table>
       <thead>
@@ -74,6 +119,7 @@
   </section>
 </main>
 
+
 <script>
 const token = localStorage.getItem("token");
 if (!token) location.href = "/login";
@@ -84,34 +130,160 @@ function show(id) {
   document.getElementById(id).classList.add("active");
 }
 
-/* USER INFO */
+/* USER INFO (ADMIN PAGE) */
 fetch("/api/users/me", {
   headers: { Authorization: "Bearer " + token }
 })
 .then(res => res.json())
 .then(data => {
- userEmail.innerText = data.email;
+  // chặn nếu không phải admin
+  if (!data || data.role !== "admin") {
+    location.href = "/";
+    return;
+  }
 
-if (data.role === "admin") {
+  userEmail.innerText = data.email || "";
   document.getElementById("orderMenu").style.display = "block";
   loadOrders();
-}
-
+  loadUsers();
 });
 
-/* PRODUCTS */
-fetch("/api/products")
-.then(res => res.json())
-.then(data => {
+
+
+/* ADMIN: USER ACTIVITY */
+let usersCache = [];
+
+function loadUsers() {
+  fetch("/api/admin/users", {
+    headers: { Authorization: "Bearer " + token }
+  })
+    .then(res => res.json())
+    .then(data => {
+      usersCache = data || [];
+      const sel = document.getElementById("userSelect");
+      sel.innerHTML = "";
+      usersCache.forEach(u => {
+        const opt = document.createElement("option");
+        opt.value = u._id;
+        opt.innerText = `${u.email} (${u.role})`;
+        sel.appendChild(opt);
+      });
+
+      if (usersCache.length) {
+        loadUserActivity(usersCache[0]._id);
+      }
+    });
+}
+
+function loadUserActivity(userId) {
+  const id = userId || document.getElementById("userSelect").value;
+  if (!id) return;
+
+  fetch(`/api/admin/users/${id}/activity`, {
+    headers: { Authorization: "Bearer " + token }
+  })
+    .then(res => res.json())
+    .then(data => {
+      const tasks = data.tasks || [];
+      const orders = data.orders || [];
+
+      const tbTasks = document.getElementById("activityTasks");
+      tbTasks.innerHTML = "";
+      tasks.forEach(t => {
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${t.title || ""}</td>
+          <td>${t.createdAt ? new Date(t.createdAt).toLocaleString() : ""}</td>
+        `;
+        tbTasks.appendChild(tr);
+      });
+
+      const tbOrders = document.getElementById("activityOrders");
+      tbOrders.innerHTML = "";
+      orders.forEach(o => {
+        const itemsText = (o.items || []).map(it => `${it.name} x${it.quantity}`).join("<br/>");
+
+        const tr = document.createElement("tr");
+        tr.innerHTML = `
+          <td>${o.total}đ</td>
+          <td>${o.status}</td>
+          <td>${itemsText}</td>
+        `;
+        tbOrders.appendChild(tr);
+      });
+    });
+}
+
+
+
+function loadProducts() {
+  fetch("/api/products", {
+    headers: { Authorization: "Bearer " + token }
+  })
+  .then(res => res.json())
+  .then(renderProducts);
+}
+
+
+function renderProducts(data) {
+
   productList.innerHTML = "";
   data.forEach(p => {
     const li = document.createElement("li");
-    li.innerText = `${p.name} - ${p.price}đ`;
+    li.style.marginBottom = "8px";
+
+    const status = p.status || "pending";
+
+    li.innerHTML = `
+      <div style="display:flex; gap:10px; align-items:center;">
+        <div style="flex:1;">${p.name} - ${p.price}đ (<b>${status}</b>)</div>
+        ${status === "pending" || status === "hidden"
+          ? `<button onclick="approveProduct('${p._id}')">Duyệt/Hiện</button>`
+          : "<button onclick=\"hideProduct('" + p._id + "')\">Ẩn</button>"}
+      </div>
+    `;
+
     productList.appendChild(li);
   });
-});
+}
+
+function createProduct() {
+  const name = document.getElementById("newProductName").value.trim();
+  const price = Number(document.getElementById("newProductPrice").value);
+  if (!name || !price) return alert("Nhập name và price");
+
+  fetch("/api/products", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer " + token
+    },
+    body: JSON.stringify({ name, price })
+  })
+  .then(res => res.json())
+  .then(() => {
+    document.getElementById("newProductName").value = "";
+    document.getElementById("newProductPrice").value = "";
+    loadProducts();
+  });
+}
+
+function approveProduct(id) {
+  fetch("/api/products/" + id + "/approve", {
+    method: "PUT",
+    headers: { Authorization: "Bearer " + token }
+  }).then(() => loadProducts());
+}
+
+function hideProduct(id) {
+  fetch("/api/products/" + id + "/hide", {
+    method: "PUT",
+    headers: { Authorization: "Bearer " + token }
+  }).then(() => loadProducts());
+}
 
 /* LOAD ORDERS (ADMIN) */
+
 function loadOrders() {
   fetch("/api/orders", {
     headers: { Authorization: "Bearer " + token }
@@ -127,8 +299,9 @@ function loadOrders() {
           <td>${o.status}</td>
           <td>
             ${o.status === "pending"
-              ? `<button onclick="approve('${o._id}')">Duyệt</button>`
-              : "✔"}
+              ? `<button onclick="approve('${o._id}')">Duyệt</button> <button onclick="viewOrder('${o._id}')">Xem</button>`
+              : `<button onclick="viewOrder('${o._id}')">Xem</button>`}
+
           </td>
         </tr>
       `;
@@ -136,9 +309,33 @@ function loadOrders() {
   });
 }
 
+/***** ORDER DETAIL *****/
+function viewOrder(id) {
+  fetch("/api/orders/" + id, {
+    headers: { Authorization: "Bearer " + token }
+  })
+    .then(res => res.json())
+    .then(o => {
+      const itemsText = (o.items || []).map(it => `${it.name} x${it.quantity} (${it.price}đ)`).join("<br/>");
+      const ship = o.shipping || {};
+
+      alert(
+        `User: ${o.user?.email || ""}\n` +
+        `Tổng tiền: ${o.total}đ\n` +
+        `Trạng thái: ${o.status}\n\n` +
+        `Tên: ${ship.name || ""}\n` +
+        `SĐT: ${ship.phone || ""}\n` +
+        `Địa chỉ: ${ship.address || ""}\n\n` +
+        `Items:\n${(o.items || []).map(it => `- ${it.name} x${it.quantity}`).join("\n")}`
+      );
+    })
+    .catch(() => alert("Không lấy được chi tiết đơn"));
+}
+
 /* APPROVE ORDER */
 function approve(id) {
   fetch("/api/orders/" + id, {
+
     method: "PUT",
     headers: {
       "Content-Type": "application/json",
