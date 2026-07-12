@@ -144,6 +144,8 @@ fetch("/api/users/me", {
 
   userEmail.innerText = data.email || "";
   document.getElementById("orderMenu").style.display = "block";
+  // fix: ensure admin products render on page load and after refresh
+  loadProducts();
   loadOrders();
   loadUsers();
 });
